@@ -16,6 +16,8 @@ import {
   Play,
   Pause,
   PhoneOff,
+  Sticker,
+  Image as ImageIcon,
 } from "lucide-react";
 import avatar from "@/assets/girlfriend-avatar.jpg";
 import wallpaper from "@/assets/chat-wallpaper.jpg";
@@ -34,7 +36,7 @@ type Msg = {
   id: string;
   from: "me" | "her";
   text: string;
-  kind?: "text" | "image" | "audio";
+  kind?: "text" | "image" | "audio" | "gif" | "sticker";
   mediaUrl?: string;
   audioDuration?: number;
   ts: number;
