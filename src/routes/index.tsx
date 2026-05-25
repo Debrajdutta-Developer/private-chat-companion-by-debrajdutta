@@ -617,15 +617,22 @@ function ChatPage() {
 
 function MessageBubble({ m }: { m: Msg }) {
   const mine = m.from === "me";
+  const isSticker = m.kind === "sticker";
   return (
     <div className={`wa-msg-in flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`relative max-w-[78%] rounded-2xl px-2.5 pb-1.5 pt-1.5 shadow ${
-          mine ? "rounded-tr-sm" : "rounded-tl-sm"
+        className={`relative max-w-[78%] ${
+          isSticker
+            ? "px-1 pb-0.5 pt-0.5"
+            : `rounded-2xl px-2.5 pb-1.5 pt-1.5 shadow ${mine ? "rounded-tr-sm" : "rounded-tl-sm"}`
         }`}
         style={{
+          ...(isSticker
+            ? {}
+            : {
           backgroundColor: mine ? "var(--wa-bubble-me)" : "var(--wa-bubble-her)",
           color: mine ? "var(--wa-bubble-me-fg)" : "var(--wa-bubble-her-fg)",
+              }),
         }}
       >
         {m.kind === "image" && m.mediaUrl ? (
@@ -634,6 +641,14 @@ function MessageBubble({ m }: { m: Msg }) {
             alt="photo"
             className="mb-1 max-h-72 w-full rounded-xl object-cover"
           />
+        ) : m.kind === "gif" && m.mediaUrl ? (
+          <img
+            src={m.mediaUrl}
+            alt="gif"
+            className="mb-1 max-h-72 w-full rounded-xl object-cover"
+          />
+        ) : isSticker ? (
+          <div className="px-2 text-[72px] leading-none">{m.text}</div>
         ) : m.kind === "audio" && m.mediaUrl ? (
           <AudioBubble url={m.mediaUrl} duration={m.audioDuration ?? 0} />
         ) : (
@@ -641,7 +656,11 @@ function MessageBubble({ m }: { m: Msg }) {
             {m.text}
           </div>
         )}
-        <div className="mt-0.5 flex items-center justify-end gap-1 pr-1 text-[10.5px] opacity-75">
+        <div
+          className={`mt-0.5 flex items-center justify-end gap-1 pr-1 text-[10.5px] ${
+            isSticker ? "text-white/70" : "opacity-75"
+          }`}
+        >
           <span>{formatTime(m.ts)}</span>
           {mine && <Ticks status={m.status} />}
         </div>
