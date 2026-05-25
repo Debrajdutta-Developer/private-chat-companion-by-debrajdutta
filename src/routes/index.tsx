@@ -122,7 +122,7 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: "text" | "image" | "audio"; mediaUrl?: string; text?: string; audioDuration?: number }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number }) {
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
     if (kind === "text" && (!text || thinking)) return;
@@ -169,7 +169,16 @@ function ChatPage() {
         role: m.from === "me" ? ("user" as const) : ("assistant" as const),
         content: m.kind === "image" ? "[sent a photo]" : m.kind === "audio" ? "[sent a voice note]" : m.text,
       }));
-      const userMessage = kind === "image" ? "[I sent you a photo]" : kind === "audio" ? "[I sent you a voice note]" : text;
+      const userMessage =
+        kind === "image"
+          ? "[I sent you a photo]"
+          : kind === "audio"
+          ? "[I sent you a voice note]"
+          : kind === "gif"
+          ? "[I sent you a funny gif]"
+          : kind === "sticker"
+          ? `[I sent you a sticker: ${text}]`
+          : text;
       const res = await fetch("/api/public/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
