@@ -100,6 +100,7 @@ function ChatPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
+  const [picker, setPicker] = useState<null | "gif" | "sticker">(null);
 
   // load persisted
   useEffect(() => {
@@ -128,7 +129,17 @@ function ChatPage() {
     const myMsg: Msg = {
       id: crypto.randomUUID(),
       from: "me",
-      text: text || (kind === "image" ? "📷 Photo" : kind === "audio" ? "🎤 Voice message" : ""),
+      text:
+        text ||
+        (kind === "image"
+          ? "📷 Photo"
+          : kind === "audio"
+          ? "🎤 Voice message"
+          : kind === "gif"
+          ? "GIF"
+          : kind === "sticker"
+          ? "Sticker"
+          : ""),
       kind,
       mediaUrl: opts?.mediaUrl,
       audioDuration: opts?.audioDuration,
