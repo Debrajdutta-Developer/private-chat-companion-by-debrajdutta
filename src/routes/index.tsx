@@ -157,11 +157,18 @@ function ChatPage() {
 
     // her replies
     setThinking(true);
-    // initial "read" pause — she sees the msg but doesn't reply instantly
-    await sleep(rand(1400, 3200));
+    // initial "read" pause — she sees the msg but doesn't reply instantly.
+    // Sometimes she's quick, sometimes distracted (mom dakche / scrolling reels).
+    const reactionRoll = Math.random();
+    let readPause: number;
+    if (reactionRoll < 0.12) readPause = rand(400, 1100); // quick glance, instant
+    else if (reactionRoll < 0.75) readPause = rand(2200, 5500); // normal
+    else if (reactionRoll < 0.93) readPause = rand(6000, 11000); // distracted
+    else readPause = rand(13000, 22000); // busy / mom dakche
+    await sleep(readPause);
     // mark seen when she starts engaging
     setMessages((m) => m.map((x) => (x.from === "me" ? { ...x, status: "seen" } : x)));
-    await sleep(rand(300, 900));
+    await sleep(rand(500, 1600));
     setStatus("typing...");
 
     try {
@@ -219,9 +226,11 @@ function ChatPage() {
       // simulate typing + bubble-by-bubble — feels like a real person texting
       for (let i = 0; i < data.messages.length; i++) {
         const piece = data.messages[i];
-        // ~85ms/char + base, with natural jitter. Cap so very long msgs aren't insane.
-        const baseTyping = 700 + piece.length * 85 + rand(0, 600);
-        const typingTime = Math.min(6500, baseTyping);
+        // Real-ish typing speed: ~110ms/char + base + jitter. Emotional/long
+        // msgs take noticeably longer — she pauses to think mid-typing.
+        const emotional = /[😭🥺😒❤️😩💀]|love|miss|sorry|hate/i.test(piece);
+        const base = 1100 + piece.length * 110 + rand(100, 900);
+        const typingTime = Math.min(8500, base + (emotional ? rand(700, 1800) : 0));
         setStatus("typing...");
         await sleep(typingTime);
         setMessages((m) => [
@@ -235,10 +244,12 @@ function ChatPage() {
           },
         ]);
         if (i < data.messages.length - 1) {
-          // brief pause between bubbles — sometimes she gets distracted (10%)
-          const distracted = Math.random() < 0.1;
+          // pause between bubbles — sometimes she gets distracted
+          const r = Math.random();
           setStatus("online");
-          await sleep(distracted ? rand(2200, 4500) : rand(500, 1300));
+          if (r < 0.08) await sleep(rand(5000, 9000)); // brb / distracted
+          else if (r < 0.25) await sleep(rand(1800, 3200)); // thinking
+          else await sleep(rand(700, 1800)); // normal between-bubble pause
         }
       }
       setStatus("online");
