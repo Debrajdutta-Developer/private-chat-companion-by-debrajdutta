@@ -63,14 +63,26 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  /* WhatsApp dark theme by default — the chat itself feels intimate at night */
+  --background: oklch(0.18 0.012 240);
+  --foreground: oklch(0.97 0.005 240);
+  --wa-header: oklch(0.28 0.045 165);
+  --wa-header-fg: oklch(0.97 0.01 165);
+  --wa-bubble-me: oklch(0.42 0.085 155);
+  --wa-bubble-me-fg: oklch(0.98 0.01 155);
+  --wa-bubble-her: oklch(0.27 0.012 240);
+  --wa-bubble-her-fg: oklch(0.97 0.005 240);
+  --wa-chat-bg: oklch(0.16 0.012 240);
+  --wa-tick-seen: oklch(0.7 0.15 220);
+  --wa-tick: oklch(0.7 0.01 240);
+  --wa-input: oklch(0.27 0.012 240);
+  --wa-online: oklch(0.78 0.18 150);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.42 0.085 155);
+  --primary-foreground: oklch(0.98 0.01 155);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
