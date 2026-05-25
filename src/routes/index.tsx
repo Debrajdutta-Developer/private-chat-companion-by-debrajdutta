@@ -373,7 +373,7 @@ function ChatPage() {
   });
 
   return (
-    <div className="flex h-screen w-screen flex-col" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
+    <div className="relative flex h-screen w-screen flex-col" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
       {/* Top bar */}
       <header
         className="flex items-center gap-3 px-3 py-2.5 shadow-md"
