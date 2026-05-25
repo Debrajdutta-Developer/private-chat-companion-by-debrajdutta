@@ -83,6 +83,29 @@ function formatDateLabel(ts: number) {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min)) + min;
 
+// Curated GIFs (Tenor CDN — direct media URLs, no API key needed)
+const GIF_LIBRARY = [
+  "https://media.tenor.com/Ks-i2u-EFmoAAAAi/cute-love.gif",
+  "https://media.tenor.com/x8v1oNUOmg4AAAAi/hi-hello.gif",
+  "https://media.tenor.com/qjpDfyL5tF8AAAAi/peach-and-goma-cat.gif",
+  "https://media.tenor.com/J2VoLyGnW9YAAAAi/hug-anime.gif",
+  "https://media.tenor.com/oSASsmsHHTwAAAAi/kiss-anime.gif",
+  "https://media.tenor.com/4q5pGtKx-1QAAAAi/angry-mad.gif",
+  "https://media.tenor.com/Fxe-CGZQ_-IAAAAi/crying-sad.gif",
+  "https://media.tenor.com/FmaCXxYxRMUAAAAi/laughing-lol.gif",
+  "https://media.tenor.com/yYbU13_Kv8MAAAAi/sleepy-tired.gif",
+  "https://media.tenor.com/Ckj1Ml1nDDoAAAAi/blush-shy.gif",
+  "https://media.tenor.com/HzKQ_QH-h7gAAAAi/sus-side-eye.gif",
+  "https://media.tenor.com/EpWVcia86VkAAAAi/wave-bye.gif",
+];
+
+// Big-emoji "stickers"
+const STICKER_LIBRARY = [
+  "🥰", "😘", "😭", "😤", "🥺", "😏", "🙄", "😴",
+  "💀", "🤡", "❤️", "💔", "🔥", "✨", "🎀", "🫶",
+  "😂", "🤭", "😒", "😩", "🤌", "👀", "🙈", "🫦",
+];
+
 function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [memory, setMemory] = useState<Record<string, string>>({});
