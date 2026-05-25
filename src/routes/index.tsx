@@ -144,10 +144,12 @@ function ChatPage() {
 
     // her replies
     setThinking(true);
-    await sleep(rand(600, 1800));
-    setStatus("typing...");
+    // initial "read" pause — she sees the msg but doesn't reply instantly
+    await sleep(rand(1400, 3200));
     // mark seen when she starts engaging
     setMessages((m) => m.map((x) => (x.from === "me" ? { ...x, status: "seen" } : x)));
+    await sleep(rand(300, 900));
+    setStatus("typing...");
 
     try {
       const history = [...messages, myMsg].map((m) => ({
@@ -183,13 +185,14 @@ function ChatPage() {
         mood: string;
       };
 
-      // simulate typing + bubble-by-bubble
+      // simulate typing + bubble-by-bubble — feels like a real person texting
       for (let i = 0; i < data.messages.length; i++) {
         const piece = data.messages[i];
-        const typingTime = Math.min(3500, 400 + piece.length * 38 + rand(0, 400));
+        // ~85ms/char + base, with natural jitter. Cap so very long msgs aren't insane.
+        const baseTyping = 700 + piece.length * 85 + rand(0, 600);
+        const typingTime = Math.min(6500, baseTyping);
         setStatus("typing...");
         await sleep(typingTime);
-        setStatus(i === data.messages.length - 1 ? "online" : "typing...");
         setMessages((m) => [
           ...m,
           {
@@ -200,7 +203,12 @@ function ChatPage() {
             status: "seen",
           },
         ]);
-        if (i < data.messages.length - 1) await sleep(rand(250, 700));
+        if (i < data.messages.length - 1) {
+          // brief pause between bubbles — sometimes she gets distracted (10%)
+          const distracted = Math.random() < 0.1;
+          setStatus("online");
+          await sleep(distracted ? rand(2200, 4500) : rand(500, 1300));
+        }
       }
       setStatus("online");
 
