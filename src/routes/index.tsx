@@ -12,6 +12,10 @@ import {
   Send,
   Check,
   CheckCheck,
+  X,
+  Play,
+  Pause,
+  PhoneOff,
 } from "lucide-react";
 import avatar from "@/assets/girlfriend-avatar.jpg";
 import wallpaper from "@/assets/chat-wallpaper.jpg";
@@ -30,6 +34,9 @@ type Msg = {
   id: string;
   from: "me" | "her";
   text: string;
+  kind?: "text" | "image" | "audio";
+  mediaUrl?: string;
+  audioDuration?: number;
   ts: number;
   status: "sending" | "sent" | "delivered" | "seen";
 };
@@ -80,6 +87,15 @@ function ChatPage() {
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<"online" | "typing..." | "last seen recently">("online");
   const [thinking, setThinking] = useState(false);
+  const [call, setCall] = useState<null | { kind: "voice" | "video"; startedAt: number }>(null);
+  const [recording, setRecording] = useState(false);
+  const [recElapsed, setRecElapsed] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recChunksRef = useRef<Blob[]>([]);
+  const recStartRef = useRef<number>(0);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
 
@@ -103,18 +119,22 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || thinking) return;
+  async function sendMessage(opts?: { kind?: "text" | "image" | "audio"; mediaUrl?: string; text?: string; audioDuration?: number }) {
+    const kind = opts?.kind ?? "text";
+    const text = opts?.text ?? input.trim();
+    if (kind === "text" && (!text || thinking)) return;
     const myMsg: Msg = {
       id: crypto.randomUUID(),
       from: "me",
-      text,
+      text: text || (kind === "image" ? "📷 Photo" : kind === "audio" ? "🎤 Voice message" : ""),
+      kind,
+      mediaUrl: opts?.mediaUrl,
+      audioDuration: opts?.audioDuration,
       ts: Date.now(),
       status: "sending",
     };
     setMessages((m) => [...m, myMsg]);
-    setInput("");
+    if (kind === "text") setInput("");
 
     // status progression
     await sleep(220);
@@ -132,12 +152,13 @@ function ChatPage() {
     try {
       const history = [...messages, myMsg].map((m) => ({
         role: m.from === "me" ? ("user" as const) : ("assistant" as const),
-        content: m.text,
+        content: m.kind === "image" ? "[sent a photo]" : m.kind === "audio" ? "[sent a voice note]" : m.text,
       }));
+      const userMessage = kind === "image" ? "[I sent you a photo]" : kind === "audio" ? "[I sent you a voice note]" : text;
       const res = await fetch("/api/public/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history: history.slice(0, -1), memory, userMessage: text }),
+        body: JSON.stringify({ history: history.slice(0, -1), memory, userMessage }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -209,6 +230,55 @@ function ChatPage() {
       e.preventDefault();
       sendMessage();
     }
+  }
+
+  function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    sendMessage({ kind: "image", mediaUrl: url });
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      recorderRef.current = mr;
+      recChunksRef.current = [];
+      mr.ondataavailable = (e) => e.data.size && recChunksRef.current.push(e.data);
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recChunksRef.current, { type: "audio/webm" });
+        const url = URL.createObjectURL(blob);
+        const dur = Math.max(1, Math.round((Date.now() - recStartRef.current) / 1000));
+        sendMessage({ kind: "audio", mediaUrl: url, audioDuration: dur });
+      };
+      recStartRef.current = Date.now();
+      mr.start();
+      setRecording(true);
+      setRecElapsed(0);
+      recTimerRef.current = setInterval(() => {
+        setRecElapsed(Math.round((Date.now() - recStartRef.current) / 1000));
+      }, 250);
+    } catch (err) {
+      alert("Mic permission needed for voice messages.");
+    }
+  }
+
+  function stopRecording(cancel = false) {
+    if (recTimerRef.current) clearInterval(recTimerRef.current);
+    recTimerRef.current = null;
+    const mr = recorderRef.current;
+    if (!mr) return;
+    if (cancel) {
+      mr.ondataavailable = null as never;
+      mr.onstop = () => mr.stream.getTracks().forEach((t) => t.stop());
+    }
+    if (mr.state !== "inactive") mr.stop();
+    recorderRef.current = null;
+    setRecording(false);
+    setRecElapsed(0);
   }
 
   function resetChat() {
