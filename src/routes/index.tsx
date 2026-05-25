@@ -459,6 +459,63 @@ function ChatPage() {
 
       {/* Input bar */}
       <div className="flex items-end gap-2 px-2 py-2" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
+        {picker && (
+          <div
+            className="absolute inset-x-0 bottom-[68px] z-30 mx-2 max-h-[55vh] overflow-y-auto rounded-2xl border border-white/10 p-3 shadow-2xl wa-scroll"
+            style={{ backgroundColor: "var(--wa-input)" }}
+          >
+            <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPicker("gif")}
+                  className={`rounded-full px-3 py-1 font-medium ${picker === "gif" ? "bg-white/15 text-white" : ""}`}
+                >
+                  GIFs
+                </button>
+                <button
+                  onClick={() => setPicker("sticker")}
+                  className={`rounded-full px-3 py-1 font-medium ${picker === "sticker" ? "bg-white/15 text-white" : ""}`}
+                >
+                  Stickers
+                </button>
+              </div>
+              <button onClick={() => setPicker(null)} className="p-1 text-white/60">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {picker === "gif" ? (
+              <div className="grid grid-cols-3 gap-2">
+                {GIF_LIBRARY.map((url) => (
+                  <button
+                    key={url}
+                    onClick={() => {
+                      setPicker(null);
+                      sendMessage({ kind: "gif", mediaUrl: url });
+                    }}
+                    className="overflow-hidden rounded-lg bg-black/30 active:scale-95"
+                  >
+                    <img src={url} alt="gif" className="h-24 w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-6 gap-2">
+                {STICKER_LIBRARY.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setPicker(null);
+                      sendMessage({ kind: "sticker", text: s });
+                    }}
+                    className="flex h-14 items-center justify-center rounded-lg bg-black/20 text-3xl active:scale-90"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -494,7 +551,10 @@ function ChatPage() {
           className="flex flex-1 items-end gap-1 rounded-3xl px-3 py-1.5"
           style={{ backgroundColor: "var(--wa-input)" }}
         >
-          <button className="p-1.5 text-white/60 hover:text-white/90">
+          <button
+            onClick={() => setPicker((p) => (p === "sticker" ? null : "sticker"))}
+            className="p-1.5 text-white/60 hover:text-white/90"
+          >
             <Smile className="h-5 w-5" />
           </button>
           <textarea
@@ -506,6 +566,20 @@ function ChatPage() {
             placeholder="Message"
             className="max-h-32 flex-1 resize-none border-0 bg-transparent py-2 text-[15px] text-white placeholder:text-white/50 focus:outline-none"
           />
+          <button
+            onClick={() => setPicker((p) => (p === "gif" ? null : "gif"))}
+            className="p-1.5 text-xs font-bold text-white/60 hover:text-white/90"
+            title="GIF"
+          >
+            <ImageIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setPicker((p) => (p === "sticker" ? null : "sticker"))}
+            className="p-1.5 text-white/60 hover:text-white/90"
+            title="Sticker"
+          >
+            <Sticker className="h-5 w-5" />
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-1.5 text-white/60 hover:text-white/90"
