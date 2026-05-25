@@ -167,7 +167,16 @@ function ChatPage() {
     try {
       const history = [...messages, myMsg].map((m) => ({
         role: m.from === "me" ? ("user" as const) : ("assistant" as const),
-        content: m.kind === "image" ? "[sent a photo]" : m.kind === "audio" ? "[sent a voice note]" : m.text,
+        content:
+          m.kind === "image"
+            ? "[sent a photo]"
+            : m.kind === "audio"
+            ? "[sent a voice note]"
+            : m.kind === "gif"
+            ? "[sent a gif]"
+            : m.kind === "sticker"
+            ? `[sent a sticker: ${m.text}]`
+            : m.text,
       }));
       const userMessage =
         kind === "image"
