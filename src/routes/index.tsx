@@ -16,6 +16,8 @@ import {
   Play,
   Pause,
   PhoneOff,
+  Sticker,
+  Image as ImageIcon,
 } from "lucide-react";
 import avatar from "@/assets/girlfriend-avatar.jpg";
 import wallpaper from "@/assets/chat-wallpaper.jpg";
@@ -34,7 +36,7 @@ type Msg = {
   id: string;
   from: "me" | "her";
   text: string;
-  kind?: "text" | "image" | "audio";
+  kind?: "text" | "image" | "audio" | "gif" | "sticker";
   mediaUrl?: string;
   audioDuration?: number;
   ts: number;
@@ -81,6 +83,29 @@ function formatDateLabel(ts: number) {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const rand = (min: number, max: number) => Math.floor(Math.random() * (max - min)) + min;
 
+// Curated GIFs (Tenor CDN — direct media URLs, no API key needed)
+const GIF_LIBRARY = [
+  "https://media.tenor.com/Ks-i2u-EFmoAAAAi/cute-love.gif",
+  "https://media.tenor.com/x8v1oNUOmg4AAAAi/hi-hello.gif",
+  "https://media.tenor.com/qjpDfyL5tF8AAAAi/peach-and-goma-cat.gif",
+  "https://media.tenor.com/J2VoLyGnW9YAAAAi/hug-anime.gif",
+  "https://media.tenor.com/oSASsmsHHTwAAAAi/kiss-anime.gif",
+  "https://media.tenor.com/4q5pGtKx-1QAAAAi/angry-mad.gif",
+  "https://media.tenor.com/Fxe-CGZQ_-IAAAAi/crying-sad.gif",
+  "https://media.tenor.com/FmaCXxYxRMUAAAAi/laughing-lol.gif",
+  "https://media.tenor.com/yYbU13_Kv8MAAAAi/sleepy-tired.gif",
+  "https://media.tenor.com/Ckj1Ml1nDDoAAAAi/blush-shy.gif",
+  "https://media.tenor.com/HzKQ_QH-h7gAAAAi/sus-side-eye.gif",
+  "https://media.tenor.com/EpWVcia86VkAAAAi/wave-bye.gif",
+];
+
+// Big-emoji "stickers"
+const STICKER_LIBRARY = [
+  "🥰", "😘", "😭", "😤", "🥺", "😏", "🙄", "😴",
+  "💀", "🤡", "❤️", "💔", "🔥", "✨", "🎀", "🫶",
+  "😂", "🤭", "😒", "😩", "🤌", "👀", "🙈", "🫦",
+];
+
 function ChatPage() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [memory, setMemory] = useState<Record<string, string>>({});
@@ -98,6 +123,7 @@ function ChatPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
+  const [picker, setPicker] = useState<null | "gif" | "sticker">(null);
 
   // load persisted
   useEffect(() => {
@@ -119,14 +145,24 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: "text" | "image" | "audio"; mediaUrl?: string; text?: string; audioDuration?: number }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number }) {
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
     if (kind === "text" && (!text || thinking)) return;
     const myMsg: Msg = {
       id: crypto.randomUUID(),
       from: "me",
-      text: text || (kind === "image" ? "📷 Photo" : kind === "audio" ? "🎤 Voice message" : ""),
+      text:
+        text ||
+        (kind === "image"
+          ? "📷 Photo"
+          : kind === "audio"
+          ? "🎤 Voice message"
+          : kind === "gif"
+          ? "GIF"
+          : kind === "sticker"
+          ? "Sticker"
+          : ""),
       kind,
       mediaUrl: opts?.mediaUrl,
       audioDuration: opts?.audioDuration,
@@ -144,19 +180,44 @@ function ChatPage() {
 
     // her replies
     setThinking(true);
-    // initial "read" pause — she sees the msg but doesn't reply instantly
-    await sleep(rand(1400, 3200));
+    // initial "read" pause — she sees the msg but doesn't reply instantly.
+    // Sometimes she's quick, sometimes distracted (mom dakche / scrolling reels).
+    const reactionRoll = Math.random();
+    let readPause: number;
+    if (reactionRoll < 0.12) readPause = rand(400, 1100); // quick glance, instant
+    else if (reactionRoll < 0.75) readPause = rand(2200, 5500); // normal
+    else if (reactionRoll < 0.93) readPause = rand(6000, 11000); // distracted
+    else readPause = rand(13000, 22000); // busy / mom dakche
+    await sleep(readPause);
     // mark seen when she starts engaging
     setMessages((m) => m.map((x) => (x.from === "me" ? { ...x, status: "seen" } : x)));
-    await sleep(rand(300, 900));
+    await sleep(rand(500, 1600));
     setStatus("typing...");
 
     try {
       const history = [...messages, myMsg].map((m) => ({
         role: m.from === "me" ? ("user" as const) : ("assistant" as const),
-        content: m.kind === "image" ? "[sent a photo]" : m.kind === "audio" ? "[sent a voice note]" : m.text,
+        content:
+          m.kind === "image"
+            ? "[sent a photo]"
+            : m.kind === "audio"
+            ? "[sent a voice note]"
+            : m.kind === "gif"
+            ? "[sent a gif]"
+            : m.kind === "sticker"
+            ? `[sent a sticker: ${m.text}]`
+            : m.text,
       }));
-      const userMessage = kind === "image" ? "[I sent you a photo]" : kind === "audio" ? "[I sent you a voice note]" : text;
+      const userMessage =
+        kind === "image"
+          ? "[I sent you a photo]"
+          : kind === "audio"
+          ? "[I sent you a voice note]"
+          : kind === "gif"
+          ? "[I sent you a funny gif]"
+          : kind === "sticker"
+          ? `[I sent you a sticker: ${text}]`
+          : text;
       const res = await fetch("/api/public/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -188,9 +249,11 @@ function ChatPage() {
       // simulate typing + bubble-by-bubble — feels like a real person texting
       for (let i = 0; i < data.messages.length; i++) {
         const piece = data.messages[i];
-        // ~85ms/char + base, with natural jitter. Cap so very long msgs aren't insane.
-        const baseTyping = 700 + piece.length * 85 + rand(0, 600);
-        const typingTime = Math.min(6500, baseTyping);
+        // Real-ish typing speed: ~110ms/char + base + jitter. Emotional/long
+        // msgs take noticeably longer — she pauses to think mid-typing.
+        const emotional = /[😭🥺😒❤️😩💀]|love|miss|sorry|hate/i.test(piece);
+        const base = 1100 + piece.length * 110 + rand(100, 900);
+        const typingTime = Math.min(8500, base + (emotional ? rand(700, 1800) : 0));
         setStatus("typing...");
         await sleep(typingTime);
         setMessages((m) => [
@@ -204,10 +267,12 @@ function ChatPage() {
           },
         ]);
         if (i < data.messages.length - 1) {
-          // brief pause between bubbles — sometimes she gets distracted (10%)
-          const distracted = Math.random() < 0.1;
+          // pause between bubbles — sometimes she gets distracted
+          const r = Math.random();
           setStatus("online");
-          await sleep(distracted ? rand(2200, 4500) : rand(500, 1300));
+          if (r < 0.08) await sleep(rand(5000, 9000)); // brb / distracted
+          else if (r < 0.25) await sleep(rand(1800, 3200)); // thinking
+          else await sleep(rand(700, 1800)); // normal between-bubble pause
         }
       }
       setStatus("online");
@@ -308,7 +373,7 @@ function ChatPage() {
   });
 
   return (
-    <div className="flex h-screen w-screen flex-col" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
+    <div className="relative flex h-screen w-screen flex-col" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
       {/* Top bar */}
       <header
         className="flex items-center gap-3 px-3 py-2.5 shadow-md"
@@ -394,6 +459,63 @@ function ChatPage() {
 
       {/* Input bar */}
       <div className="flex items-end gap-2 px-2 py-2" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
+        {picker && (
+          <div
+            className="absolute inset-x-0 bottom-[68px] z-30 mx-2 max-h-[55vh] overflow-y-auto rounded-2xl border border-white/10 p-3 shadow-2xl wa-scroll"
+            style={{ backgroundColor: "var(--wa-input)" }}
+          >
+            <div className="mb-2 flex items-center justify-between text-xs text-white/70">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPicker("gif")}
+                  className={`rounded-full px-3 py-1 font-medium ${picker === "gif" ? "bg-white/15 text-white" : ""}`}
+                >
+                  GIFs
+                </button>
+                <button
+                  onClick={() => setPicker("sticker")}
+                  className={`rounded-full px-3 py-1 font-medium ${picker === "sticker" ? "bg-white/15 text-white" : ""}`}
+                >
+                  Stickers
+                </button>
+              </div>
+              <button onClick={() => setPicker(null)} className="p-1 text-white/60">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {picker === "gif" ? (
+              <div className="grid grid-cols-3 gap-2">
+                {GIF_LIBRARY.map((url) => (
+                  <button
+                    key={url}
+                    onClick={() => {
+                      setPicker(null);
+                      sendMessage({ kind: "gif", mediaUrl: url });
+                    }}
+                    className="overflow-hidden rounded-lg bg-black/30 active:scale-95"
+                  >
+                    <img src={url} alt="gif" className="h-24 w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-6 gap-2">
+                {STICKER_LIBRARY.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setPicker(null);
+                      sendMessage({ kind: "sticker", text: s });
+                    }}
+                    className="flex h-14 items-center justify-center rounded-lg bg-black/20 text-3xl active:scale-90"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -429,7 +551,10 @@ function ChatPage() {
           className="flex flex-1 items-end gap-1 rounded-3xl px-3 py-1.5"
           style={{ backgroundColor: "var(--wa-input)" }}
         >
-          <button className="p-1.5 text-white/60 hover:text-white/90">
+          <button
+            onClick={() => setPicker((p) => (p === "sticker" ? null : "sticker"))}
+            className="p-1.5 text-white/60 hover:text-white/90"
+          >
             <Smile className="h-5 w-5" />
           </button>
           <textarea
@@ -441,6 +566,20 @@ function ChatPage() {
             placeholder="Message"
             className="max-h-32 flex-1 resize-none border-0 bg-transparent py-2 text-[15px] text-white placeholder:text-white/50 focus:outline-none"
           />
+          <button
+            onClick={() => setPicker((p) => (p === "gif" ? null : "gif"))}
+            className="p-1.5 text-xs font-bold text-white/60 hover:text-white/90"
+            title="GIF"
+          >
+            <ImageIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setPicker((p) => (p === "sticker" ? null : "sticker"))}
+            className="p-1.5 text-white/60 hover:text-white/90"
+            title="Sticker"
+          >
+            <Sticker className="h-5 w-5" />
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-1.5 text-white/60 hover:text-white/90"
@@ -478,15 +617,22 @@ function ChatPage() {
 
 function MessageBubble({ m }: { m: Msg }) {
   const mine = m.from === "me";
+  const isSticker = m.kind === "sticker";
   return (
     <div className={`wa-msg-in flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`relative max-w-[78%] rounded-2xl px-2.5 pb-1.5 pt-1.5 shadow ${
-          mine ? "rounded-tr-sm" : "rounded-tl-sm"
+        className={`relative max-w-[78%] ${
+          isSticker
+            ? "px-1 pb-0.5 pt-0.5"
+            : `rounded-2xl px-2.5 pb-1.5 pt-1.5 shadow ${mine ? "rounded-tr-sm" : "rounded-tl-sm"}`
         }`}
         style={{
+          ...(isSticker
+            ? {}
+            : {
           backgroundColor: mine ? "var(--wa-bubble-me)" : "var(--wa-bubble-her)",
           color: mine ? "var(--wa-bubble-me-fg)" : "var(--wa-bubble-her-fg)",
+              }),
         }}
       >
         {m.kind === "image" && m.mediaUrl ? (
@@ -495,6 +641,14 @@ function MessageBubble({ m }: { m: Msg }) {
             alt="photo"
             className="mb-1 max-h-72 w-full rounded-xl object-cover"
           />
+        ) : m.kind === "gif" && m.mediaUrl ? (
+          <img
+            src={m.mediaUrl}
+            alt="gif"
+            className="mb-1 max-h-72 w-full rounded-xl object-cover"
+          />
+        ) : isSticker ? (
+          <div className="px-2 text-[72px] leading-none">{m.text}</div>
         ) : m.kind === "audio" && m.mediaUrl ? (
           <AudioBubble url={m.mediaUrl} duration={m.audioDuration ?? 0} />
         ) : (
@@ -502,7 +656,11 @@ function MessageBubble({ m }: { m: Msg }) {
             {m.text}
           </div>
         )}
-        <div className="mt-0.5 flex items-center justify-end gap-1 pr-1 text-[10.5px] opacity-75">
+        <div
+          className={`mt-0.5 flex items-center justify-end gap-1 pr-1 text-[10.5px] ${
+            isSticker ? "text-white/70" : "opacity-75"
+          }`}
+        >
           <span>{formatTime(m.ts)}</span>
           {mine && <Ticks status={m.status} />}
         </div>
