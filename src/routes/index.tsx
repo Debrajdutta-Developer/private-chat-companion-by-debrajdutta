@@ -321,10 +321,16 @@ function ChatPage() {
           <span className="text-[15px] font-semibold">Aarohi 💚</span>
           <span className="text-[11.5px] opacity-90">{status}</span>
         </div>
-        <button className="p-2 opacity-90 hover:opacity-100">
+        <button
+          onClick={() => setCall({ kind: "video", startedAt: Date.now() })}
+          className="p-2 opacity-90 hover:opacity-100"
+        >
           <Video className="h-5 w-5" />
         </button>
-        <button className="p-2 opacity-90 hover:opacity-100">
+        <button
+          onClick={() => setCall({ kind: "voice", startedAt: Date.now() })}
+          className="p-2 opacity-90 hover:opacity-100"
+        >
           <Phone className="h-5 w-5" />
         </button>
         <button onClick={resetChat} className="p-2 opacity-90 hover:opacity-100" title="Clear chat">
@@ -380,6 +386,37 @@ function ChatPage() {
 
       {/* Input bar */}
       <div className="flex items-end gap-2 px-2 py-2" style={{ backgroundColor: "var(--wa-chat-bg)" }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePickFile}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handlePickFile}
+        />
+        {recording ? (
+          <div
+            className="flex flex-1 items-center gap-3 rounded-3xl px-4 py-3"
+            style={{ backgroundColor: "var(--wa-input)" }}
+          >
+            <button onClick={() => stopRecording(true)} className="text-red-400">
+              <X className="h-5 w-5" />
+            </button>
+            <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+            <span className="font-mono text-sm text-white/90">
+              {String(Math.floor(recElapsed / 60)).padStart(2, "0")}:
+              {String(recElapsed % 60).padStart(2, "0")}
+            </span>
+            <span className="flex-1 text-xs text-white/50">Recording… release to send</span>
+          </div>
+        ) : (
         <div
           className="flex flex-1 items-end gap-1 rounded-3xl px-3 py-1.5"
           style={{ backgroundColor: "var(--wa-input)" }}
@@ -392,27 +429,41 @@ function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             rows={1}
+            enterKeyHint="send"
             placeholder="Message"
             className="max-h-32 flex-1 resize-none border-0 bg-transparent py-2 text-[15px] text-white placeholder:text-white/50 focus:outline-none"
           />
-          <button className="p-1.5 text-white/60 hover:text-white/90">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 text-white/60 hover:text-white/90"
+          >
             <Paperclip className="h-5 w-5 -rotate-45" />
           </button>
           {!input.trim() && (
-            <button className="p-1.5 text-white/60 hover:text-white/90">
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              className="p-1.5 text-white/60 hover:text-white/90"
+            >
               <Camera className="h-5 w-5" />
             </button>
           )}
         </div>
+        )}
         <button
-          onClick={sendMessage}
-          disabled={thinking && !input.trim()}
+          onClick={() => {
+            if (recording) return stopRecording(false);
+            if (input.trim()) return sendMessage();
+            startRecording();
+          }}
+          disabled={thinking && !input.trim() && !recording}
           className="flex h-11 w-11 items-center justify-center rounded-full shadow-md transition active:scale-95"
           style={{ backgroundColor: "var(--wa-header)", color: "var(--wa-header-fg)" }}
         >
-          {input.trim() ? <Send className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          {recording ? <Send className="h-5 w-5" /> : input.trim() ? <Send className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </button>
       </div>
+
+      {call && <CallOverlay kind={call.kind} onEnd={() => setCall(null)} />}
     </div>
   );
 }
@@ -430,14 +481,100 @@ function MessageBubble({ m }: { m: Msg }) {
           color: mine ? "var(--wa-bubble-me-fg)" : "var(--wa-bubble-her-fg)",
         }}
       >
-        <div className="whitespace-pre-wrap break-words px-1 text-[14.5px] leading-snug">
-          {m.text}
-        </div>
+        {m.kind === "image" && m.mediaUrl ? (
+          <img
+            src={m.mediaUrl}
+            alt="photo"
+            className="mb-1 max-h-72 w-full rounded-xl object-cover"
+          />
+        ) : m.kind === "audio" && m.mediaUrl ? (
+          <AudioBubble url={m.mediaUrl} duration={m.audioDuration ?? 0} />
+        ) : (
+          <div className="whitespace-pre-wrap break-words px-1 text-[14.5px] leading-snug">
+            {m.text}
+          </div>
+        )}
         <div className="mt-0.5 flex items-center justify-end gap-1 pr-1 text-[10.5px] opacity-75">
           <span>{formatTime(m.ts)}</span>
           {mine && <Ticks status={m.status} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AudioBubble({ url, duration }: { url: string; duration: number }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  function toggle() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playing) {
+      a.pause();
+      setPlaying(false);
+    } else {
+      a.play();
+      setPlaying(true);
+    }
+  }
+  return (
+    <div className="flex min-w-[180px] items-center gap-2 px-1 py-1">
+      <button
+        onClick={toggle}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15"
+      >
+        {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+      </button>
+      <div className="flex h-1 flex-1 items-center">
+        <div className="h-1 w-full rounded-full bg-white/25" />
+      </div>
+      <span className="text-[11px] opacity-80">
+        {String(Math.floor(duration / 60)).padStart(2, "0")}:
+        {String(duration % 60).padStart(2, "0")}
+      </span>
+      <audio
+        ref={audioRef}
+        src={url}
+        onEnded={() => setPlaying(false)}
+        className="hidden"
+      />
+    </div>
+  );
+}
+
+function CallOverlay({ kind, onEnd }: { kind: "voice" | "video"; onEnd: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    const connectAt = setTimeout(() => setConnected(true), 2200);
+    const tick = setInterval(() => setElapsed((e) => (connected ? e + 1 : e)), 1000);
+    return () => {
+      clearTimeout(connectAt);
+      clearInterval(tick);
+    };
+  }, [connected]);
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-gradient-to-b from-emerald-900 via-slate-900 to-black px-6 py-12 text-white">
+      <div className="flex flex-col items-center gap-3">
+        <img src={avatar} alt="Aarohi" className="h-32 w-32 rounded-full object-cover shadow-2xl" />
+        <div className="text-2xl font-medium">Aarohi 💚</div>
+        <div className="text-sm opacity-80">
+          {connected
+            ? `${kind === "video" ? "Video call" : "Voice call"} · ${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`
+            : `Calling…`}
+        </div>
+      </div>
+      {kind === "video" && (
+        <div className="absolute right-4 top-16 h-32 w-24 overflow-hidden rounded-xl border border-white/20 bg-black/60 text-[10px] text-white/50 flex items-center justify-center">
+          you
+        </div>
+      )}
+      <button
+        onClick={onEnd}
+        className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 shadow-xl active:scale-95"
+      >
+        <PhoneOff className="h-7 w-7" />
+      </button>
     </div>
   );
 }
