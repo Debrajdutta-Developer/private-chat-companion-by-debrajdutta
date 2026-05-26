@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: private-chat
+    env: static
+    buildCommand: bun run build
+    staticPublishPath: dist
