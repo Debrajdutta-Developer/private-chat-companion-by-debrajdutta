@@ -1,11 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getClientIp, rateLimit } from "@/lib/api-guard.server";
 
 export const Route = createFileRoute("/api/public/selfie")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
-          const { prompt } = (await request.json()) as { prompt: string };
+          // Stricter rate limit on image generation (more expensive): 8/min per IP
+          const ip = getClientIp(request);
+          const rl = rateLimit(`selfie:${ip}`, 8, 60_000);
+          if (!rl.ok) {
+            return new Response(JSON.stringify({ error: "too many" }), {
+              status: 429,
+              headers: { "Retry-After": String(rl.retryAfter) },
+            });
+          }
+
+          const raw = (await request.json().catch(() => null)) as { prompt?: unknown } | null;
+          const prompt =
+            raw && typeof raw.prompt === "string" ? raw.prompt.slice(0, 500) : "";
+          if (!prompt) {
+            return new Response(JSON.stringify({ error: "bad request" }), { status: 400 });
+          }
           const key = process.env.LOVABLE_API_KEY;
           if (!key) return new Response(JSON.stringify({ error: "no key" }), { status: 500 });
 
