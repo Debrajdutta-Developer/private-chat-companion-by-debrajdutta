@@ -145,57 +145,66 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean }) {
+    const proactive = !!opts?.proactive;
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
-    if (kind === "text" && (!text || thinking)) return;
-    const myMsg: Msg = {
-      id: crypto.randomUUID(),
-      from: "me",
-      text:
-        text ||
-        (kind === "image"
-          ? "📷 Photo"
-          : kind === "audio"
-          ? "🎤 Voice message"
-          : kind === "gif"
-          ? "GIF"
-          : kind === "sticker"
-          ? "Sticker"
-          : ""),
-      kind,
-      mediaUrl: opts?.mediaUrl,
-      audioDuration: opts?.audioDuration,
-      ts: Date.now(),
-      status: "sending",
-    };
-    setMessages((m) => [...m, myMsg]);
-    if (kind === "text") setInput("");
+    if (!proactive && kind === "text" && (!text || thinking)) return;
+    let myMsg: Msg | null = null;
+    if (!proactive) {
+      myMsg = {
+        id: crypto.randomUUID(),
+        from: "me",
+        text:
+          text ||
+          (kind === "image"
+            ? "📷 Photo"
+            : kind === "audio"
+            ? "🎤 Voice message"
+            : kind === "gif"
+            ? "GIF"
+            : kind === "sticker"
+            ? "Sticker"
+            : ""),
+        kind,
+        mediaUrl: opts?.mediaUrl,
+        audioDuration: opts?.audioDuration,
+        ts: Date.now(),
+        status: "sending",
+      };
+      const myMsgFinal = myMsg;
+      setMessages((m) => [...m, myMsgFinal]);
+      if (kind === "text") setInput("");
 
-    // status progression
-    await sleep(220);
-    setMessages((m) => m.map((x) => (x.id === myMsg.id ? { ...x, status: "sent" } : x)));
-    await sleep(rand(250, 600));
-    setMessages((m) => m.map((x) => (x.id === myMsg.id ? { ...x, status: "delivered" } : x)));
+      // status progression
+      await sleep(220);
+      setMessages((m) => m.map((x) => (x.id === myMsgFinal.id ? { ...x, status: "sent" } : x)));
+      await sleep(rand(250, 600));
+      setMessages((m) => m.map((x) => (x.id === myMsgFinal.id ? { ...x, status: "delivered" } : x)));
+    }
 
     // her replies
     setThinking(true);
     // initial "read" pause — she sees the msg but doesn't reply instantly.
     // Sometimes she's quick, sometimes distracted (mom dakche / scrolling reels).
-    const reactionRoll = Math.random();
-    let readPause: number;
-    if (reactionRoll < 0.12) readPause = rand(400, 1100); // quick glance, instant
-    else if (reactionRoll < 0.75) readPause = rand(2200, 5500); // normal
-    else if (reactionRoll < 0.93) readPause = rand(6000, 11000); // distracted
-    else readPause = rand(13000, 22000); // busy / mom dakche
-    await sleep(readPause);
-    // mark seen when she starts engaging
-    setMessages((m) => m.map((x) => (x.from === "me" ? { ...x, status: "seen" } : x)));
-    await sleep(rand(500, 1600));
+    if (!proactive) {
+      const reactionRoll = Math.random();
+      let readPause: number;
+      if (reactionRoll < 0.12) readPause = rand(400, 1100);
+      else if (reactionRoll < 0.75) readPause = rand(2200, 5500);
+      else if (reactionRoll < 0.93) readPause = rand(6000, 11000);
+      else readPause = rand(13000, 22000);
+      await sleep(readPause);
+      setMessages((m) => m.map((x) => (x.from === "me" ? { ...x, status: "seen" } : x)));
+      await sleep(rand(500, 1600));
+    } else {
+      await sleep(rand(800, 2200));
+    }
     setStatus("typing...");
 
     try {
-      const history = [...messages, myMsg].map((m) => ({
+      const histBase = myMsg ? [...messages, myMsg] : messages;
+      const history = histBase.map((m) => ({
         role: m.from === "me" ? ("user" as const) : ("assistant" as const),
         content:
           m.kind === "image"
@@ -208,8 +217,9 @@ function ChatPage() {
             ? `[sent a sticker: ${m.text}]`
             : m.text,
       }));
-      const userMessage =
-        kind === "image"
+      const userMessage = proactive
+        ? "[PROACTIVE_OPENER]"
+        : kind === "image"
           ? "[I sent you a photo]"
           : kind === "audio"
           ? "[I sent you a voice note]"
@@ -221,7 +231,7 @@ function ChatPage() {
       const res = await fetch("/api/public/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history: history.slice(0, -1), memory, userMessage }),
+        body: JSON.stringify({ history: proactive ? history : history.slice(0, -1), memory, userMessage }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -244,6 +254,8 @@ function ChatPage() {
         messages: string[];
         memory_updates: Record<string, string>;
         mood: string;
+        send_selfie?: boolean;
+        selfie_prompt?: string;
       };
 
       // simulate typing + bubble-by-bubble — feels like a real person texting
@@ -276,6 +288,40 @@ function ChatPage() {
         }
       }
       setStatus("online");
+
+      // Selfie generation — she "takes" a pic and sends it
+      if (data.send_selfie && data.selfie_prompt) {
+        try {
+          setStatus("typing...");
+          await sleep(rand(1500, 3000));
+          const selfieRes = await fetch("/api/public/selfie", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: data.selfie_prompt }),
+          });
+          if (selfieRes.ok) {
+            const sd = (await selfieRes.json()) as { url?: string };
+            if (sd.url) {
+              setMessages((m) => [
+                ...m,
+                {
+                  id: crypto.randomUUID(),
+                  from: "her",
+                  text: "📷 Photo",
+                  kind: "image",
+                  mediaUrl: sd.url,
+                  ts: Date.now(),
+                  status: "seen",
+                },
+              ]);
+            }
+          }
+          setStatus("online");
+        } catch (e) {
+          console.error("selfie fail", e);
+          setStatus("online");
+        }
+      }
 
       if (data.memory_updates && Object.keys(data.memory_updates).length) {
         setMemory((mem) => ({ ...mem, ...data.memory_updates }));
