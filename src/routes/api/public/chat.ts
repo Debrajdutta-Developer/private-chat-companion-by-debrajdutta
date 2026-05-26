@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getClientIp, rateLimit, sanitizeForPrompt } from "@/lib/api-guard.server";
+import { sanitizeForPrompt } from "@/lib/api-guard.server";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
