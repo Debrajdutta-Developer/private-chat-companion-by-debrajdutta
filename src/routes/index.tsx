@@ -133,6 +133,28 @@ function ChatPage() {
     loadedRef.current = true;
   }, []);
 
+  // Proactive opener — if she hasn't messaged in a while (or ever), she texts first
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const last = messages[messages.length - 1];
+    const idleMs = last ? Date.now() - last.ts : Infinity;
+    // Send opener if: empty chat, OR last message is from "me" with no reply for >2min,
+    // OR last activity was >30min ago (re-open the app).
+    const shouldOpen =
+      !thinking &&
+      ((messages.length === 0) ||
+        (last?.from === "her" && idleMs > 30 * 60 * 1000) ||
+        (last?.from === "me" && idleMs > 2 * 60 * 1000));
+    if (!shouldOpen) return;
+    const delay = messages.length === 0 ? rand(2500, 5000) : rand(8000, 18000);
+    const t = setTimeout(() => {
+      // double-check still idle
+      sendMessage({ proactive: true }).catch(() => {});
+    }, delay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedRef.current]);
+
   // persist
   useEffect(() => {
     if (!loadedRef.current) return;
