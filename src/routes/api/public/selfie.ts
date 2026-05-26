@@ -1,21 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getClientIp, rateLimit } from "@/lib/api-guard.server";
 
 export const Route = createFileRoute("/api/public/selfie")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
-          // Stricter rate limit on image generation (more expensive): 8/min per IP
-          const ip = getClientIp(request);
-          const rl = rateLimit(`selfie:${ip}`, 8, 60_000);
-          if (!rl.ok) {
-            return new Response(JSON.stringify({ error: "too many" }), {
-              status: 429,
-              headers: { "Retry-After": String(rl.retryAfter) },
-            });
-          }
-
           const raw = (await request.json().catch(() => null)) as { prompt?: unknown } | null;
           const prompt =
             raw && typeof raw.prompt === "string" ? raw.prompt.slice(0, 500) : "";
@@ -26,9 +15,9 @@ export const Route = createFileRoute("/api/public/selfie")({
           if (!key) return new Response(JSON.stringify({ error: "no key" }), { status: 500 });
 
           const safePrompt =
-            "Realistic phone selfie photo, candid, natural lighting, slight grain, looks like a real iPhone front-camera photo. Subject: " +
+            "ULTRA REALISTIC photograph, real human photo, shot on iPhone 15 Pro front camera, candid amateur selfie, natural skin texture with pores and subtle imperfections, real natural lighting, slight sensor grain, shallow depth of field, photojournalistic, looks like a genuine social media selfie. NOT anime, NOT cartoon, NOT illustration, NOT 3D render, NOT CGI, NOT digital art, NOT painting, NOT stylized. Photorealistic real 21 year old indian bengali woman. Subject: " +
             prompt +
-            ". Cute, SFW, fully clothed, modest, casual. No text, no watermark.";
+            ". No text, no watermark, no logo.";
 
           const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
