@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicSelfieRouteImport } from './routes/api/public/selfie'
 import { Route as ApiPublicChatRouteImport } from './routes/api/public/chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSelfieRoute = ApiPublicSelfieRouteImport.update({
+  id: '/api/public/selfie',
+  path: '/api/public/selfie',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicChatRoute = ApiPublicChatRouteImport.update({
@@ -26,27 +32,31 @@ const ApiPublicChatRoute = ApiPublicChatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/public/chat': typeof ApiPublicChatRoute
+  '/api/public/selfie': typeof ApiPublicSelfieRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/public/chat': typeof ApiPublicChatRoute
+  '/api/public/selfie': typeof ApiPublicSelfieRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/public/chat': typeof ApiPublicChatRoute
+  '/api/public/selfie': typeof ApiPublicSelfieRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/chat'
+  fullPaths: '/' | '/api/public/chat' | '/api/public/selfie'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/chat'
-  id: '__root__' | '/' | '/api/public/chat'
+  to: '/' | '/api/public/chat' | '/api/public/selfie'
+  id: '__root__' | '/' | '/api/public/chat' | '/api/public/selfie'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiPublicChatRoute: typeof ApiPublicChatRoute
+  ApiPublicSelfieRoute: typeof ApiPublicSelfieRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/selfie': {
+      id: '/api/public/selfie'
+      path: '/api/public/selfie'
+      fullPath: '/api/public/selfie'
+      preLoaderRoute: typeof ApiPublicSelfieRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/chat': {
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiPublicChatRoute: ApiPublicChatRoute,
+  ApiPublicSelfieRoute: ApiPublicSelfieRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
