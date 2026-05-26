@@ -95,16 +95,6 @@ export const Route = createFileRoute("/api/public/chat")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          // Rate limit: 30 requests / minute per IP for chat
-          const ip = getClientIp(request);
-          const rl = rateLimit(`chat:${ip}`, 30, 60_000);
-          if (!rl.ok) {
-            return new Response(
-              JSON.stringify({ error: "slow down sona 🥲 ektu wait koro" }),
-              { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
-            );
-          }
-
           const raw = (await request.json().catch(() => null)) as
             | { history?: unknown; memory?: unknown; userMessage?: unknown }
             | null;
