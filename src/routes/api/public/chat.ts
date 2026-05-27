@@ -144,6 +144,16 @@ export const Route = createFileRoute("/api/public/chat")({
               content: String(m.content).slice(0, MAX_HISTORY_ITEM),
             }));
 
+          // Optional image attachment (data URL) — enables vision so she can
+          // actually SEE the photo the user just sent and react to it.
+          const rawImage = (raw as { imageData?: unknown }).imageData;
+          const imageData =
+            typeof rawImage === "string" &&
+            rawImage.startsWith("data:image/") &&
+            rawImage.length < 6_000_000
+              ? rawImage
+              : null;
+
           const rawMemory =
             raw.memory && typeof raw.memory === "object" && !Array.isArray(raw.memory)
               ? (raw.memory as Record<string, unknown>)
@@ -188,10 +198,17 @@ export const Route = createFileRoute("/api/public/chat")({
           const pr = (raw as { proactiveReason?: string | null }).proactiveReason;
           const reasonText = pr ? `\n\nProactive reason for this turn: ${pr}.` : "";
 
+          const userContent = imageData
+            ? [
+                { type: "text", text: userMessage || "[I sent you this photo, react to it like a real girlfriend would. Comment on what you actually SEE — outfit, place, mood, vibe. Tease, compliment, ask questions about it.]" },
+                { type: "image_url", image_url: { url: imageData } },
+              ]
+            : userMessage;
+
           const messages = [
             { role: "system", content: SYSTEM_PROMPT + memoryText + timeText + reasonText },
             ...history,
-            { role: "user", content: userMessage },
+            { role: "user", content: userContent },
           ];
 
           const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
