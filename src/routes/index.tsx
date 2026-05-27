@@ -321,7 +321,7 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean; proactiveReason?: string }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean; proactiveReason?: string; imageData?: string }) {
     const proactive = !!opts?.proactive;
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
@@ -411,6 +411,7 @@ function ChatPage() {
           history: proactive ? history : history.slice(0, -1),
           memory,
           userMessage,
+          imageData: kind === "image" && opts?.imageData ? opts.imageData : null,
           clientTime: {
             iso: new Date().toISOString(),
             hour: new Date().getHours(),
@@ -543,8 +544,14 @@ function ChatPage() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    const url = URL.createObjectURL(f);
-    sendMessage({ kind: "image", mediaUrl: url });
+    // Read as dataURL so we can both display it AND send pixel data to the AI for vision.
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      sendMessage({ kind: "image", mediaUrl: dataUrl, imageData: dataUrl });
+    };
+    reader.readAsDataURL(f);
   }
 
   async function startRecording() {
