@@ -126,6 +126,9 @@ function ChatPage() {
   const [picker, setPicker] = useState<null | "gif" | "sticker">(null);
   const proactiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const greetRef = useRef<{ morning: string; night: string }>({ morning: "", night: "" });
+  const notifTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const notifShownRef = useRef<Set<Notification>>(new Set());
+  const lastNotifiedIdRef = useRef<string>("");
 
   // load persisted
   useEffect(() => {
@@ -139,6 +142,83 @@ function ChatPage() {
         night: localStorage.getItem("wa-gf-last-night") || "",
       };
     } catch {}
+    // Ask for notification permission once so she can "ping" like WhatsApp
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  // Clear any pending repeat-notifications + close shown ones
+  function clearNotifications() {
+    notifTimersRef.current.forEach((t) => clearTimeout(t));
+    notifTimersRef.current = [];
+    notifShownRef.current.forEach((n) => {
+      try { n.close(); } catch {}
+    });
+    notifShownRef.current.clear();
+  }
+
+  function showNotification(body: string) {
+    try {
+      if (typeof Notification === "undefined") return;
+      if (Notification.permission !== "granted") return;
+      const n = new Notification("Aarohi 💚", {
+        body,
+        icon: avatar,
+        tag: "aarohi-msg",
+        silent: false,
+      });
+      n.onclick = () => {
+        try { window.focus(); } catch {}
+        clearNotifications();
+        n.close();
+      };
+      notifShownRef.current.add(n);
+    } catch {}
+  }
+
+  // Whenever her latest message arrives and the tab isn't focused, ping 3-4 times
+  // (like WhatsApp re-pinging). Clears as soon as user focuses or replies.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.from !== "her") return;
+    if (last.id === lastNotifiedIdRef.current) return;
+    lastNotifiedIdRef.current = last.id;
+    const isHidden = typeof document !== "undefined" && (document.hidden || !document.hasFocus());
+    if (!isHidden) return;
+
+    const body =
+      last.kind === "image" ? "📷 Photo"
+      : last.kind === "audio" ? "🎤 Voice message"
+      : last.kind === "gif" ? "GIF"
+      : last.text;
+
+    clearNotifications();
+    // First ping immediately, then 3 reminders.
+    showNotification(body);
+    [25_000, 60_000, 120_000].forEach((delay) => {
+      const t = setTimeout(() => {
+        // Only re-ping if user still hasn't replied / focused
+        if (typeof document !== "undefined" && !document.hidden && document.hasFocus()) return;
+        showNotification(body);
+      }, delay);
+      notifTimersRef.current.push(t);
+    });
+  }, [messages]);
+
+  // Clear notifications when user focuses the tab or starts typing
+  useEffect(() => {
+    function onFocus() { clearNotifications(); }
+    function onVis() { if (!document.hidden) clearNotifications(); }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   // Proactive scheduler — re-evaluates on every message change + every minute.
@@ -241,7 +321,7 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean; proactiveReason?: string }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean; proactiveReason?: string; imageData?: string }) {
     const proactive = !!opts?.proactive;
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
@@ -331,6 +411,7 @@ function ChatPage() {
           history: proactive ? history : history.slice(0, -1),
           memory,
           userMessage,
+          imageData: kind === "image" && opts?.imageData ? opts.imageData : null,
           clientTime: {
             iso: new Date().toISOString(),
             hour: new Date().getHours(),
@@ -463,8 +544,14 @@ function ChatPage() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    const url = URL.createObjectURL(f);
-    sendMessage({ kind: "image", mediaUrl: url });
+    // Read as dataURL so we can both display it AND send pixel data to the AI for vision.
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) return;
+      sendMessage({ kind: "image", mediaUrl: dataUrl, imageData: dataUrl });
+    };
+    reader.readAsDataURL(f);
   }
 
   async function startRecording() {
