@@ -124,6 +124,8 @@ function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
   const [picker, setPicker] = useState<null | "gif" | "sticker">(null);
+  const proactiveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const greetRef = useRef<{ morning: string; night: string }>({ morning: "", night: "" });
 
   // load persisted
   useEffect(() => {
@@ -131,29 +133,101 @@ function ChatPage() {
     setMessages(s.messages);
     setMemory(s.memory);
     loadedRef.current = true;
+    try {
+      greetRef.current = {
+        morning: localStorage.getItem("wa-gf-last-morning") || "",
+        night: localStorage.getItem("wa-gf-last-night") || "",
+      };
+    } catch {}
   }, []);
 
-  // Proactive opener — if she hasn't messaged in a while (or ever), she texts first
+  // Proactive scheduler — re-evaluates on every message change + every minute.
+  // She reaches out first for: morning greet, night greet, missing-you check-in,
+  // and "where did you go" when the user goes quiet mid-convo.
   useEffect(() => {
     if (!loadedRef.current) return;
-    const last = messages[messages.length - 1];
-    const idleMs = last ? Date.now() - last.ts : Infinity;
-    // Send opener if: empty chat, OR last message is from "me" with no reply for >2min,
-    // OR last activity was >30min ago (re-open the app).
-    const shouldOpen =
-      !thinking &&
-      ((messages.length === 0) ||
-        (last?.from === "her" && idleMs > 30 * 60 * 1000) ||
-        (last?.from === "me" && idleMs > 2 * 60 * 1000));
-    if (!shouldOpen) return;
-    const delay = messages.length === 0 ? rand(2500, 5000) : rand(8000, 18000);
-    const t = setTimeout(() => {
-      // double-check still idle
-      sendMessage({ proactive: true }).catch(() => {});
-    }, delay);
-    return () => clearTimeout(t);
+    function schedule() {
+      if (proactiveTimerRef.current) {
+        clearTimeout(proactiveTimerRef.current);
+        proactiveTimerRef.current = null;
+      }
+      if (thinking) return;
+      const now = new Date();
+      const hour = now.getHours();
+      const today = now.toISOString().slice(0, 10);
+      const last = messages[messages.length - 1];
+      const idleMs = last ? Date.now() - last.ts : Infinity;
+      const lastWasHer = last?.from === "her";
+      const lastWasMe = last?.from === "me";
+
+      // Morning greet (6am–10am), once per day, only if she hasn't already messaged today
+      if (
+        hour >= 6 && hour < 11 &&
+        greetRef.current.morning !== today &&
+        (!lastWasHer || idleMs > 5 * 60 * 1000)
+      ) {
+        proactiveTimerRef.current = setTimeout(() => {
+          greetRef.current.morning = today;
+          try { localStorage.setItem("wa-gf-last-morning", today); } catch {}
+          sendMessage({ proactive: true, proactiveReason: "morning" }).catch(() => {});
+        }, rand(3000, 9000));
+        return;
+      }
+      // Night greet (10pm–1am), once per day
+      if (
+        (hour >= 22 || hour < 1) &&
+        greetRef.current.night !== today &&
+        (!lastWasHer || idleMs > 5 * 60 * 1000)
+      ) {
+        proactiveTimerRef.current = setTimeout(() => {
+          greetRef.current.night = today;
+          try { localStorage.setItem("wa-gf-last-night", today); } catch {}
+          sendMessage({ proactive: true, proactiveReason: "night" }).catch(() => {});
+        }, rand(3000, 9000));
+        return;
+      }
+      // Empty chat → first hello
+      if (messages.length === 0) {
+        proactiveTimerRef.current = setTimeout(() => {
+          sendMessage({ proactive: true, proactiveReason: "first" }).catch(() => {});
+        }, rand(2500, 5000));
+        return;
+      }
+      // User went quiet mid-convo — last msg was from her, he didn't reply.
+      // She nudges after ~3–6 min ("kothay gele?"), and again after ~20 min.
+      if (lastWasHer) {
+        const targets = [4 * 60 * 1000, 20 * 60 * 1000, 90 * 60 * 1000];
+        const next = targets.find((t) => idleMs < t);
+        if (next) {
+          proactiveTimerRef.current = setTimeout(() => {
+            sendMessage({ proactive: true, proactiveReason: "missing" }).catch(() => {});
+          }, next - idleMs + rand(2000, 8000));
+          return;
+        }
+      }
+      // User sent something, she didn't reply yet (race-safe fallback)
+      if (lastWasMe && idleMs > 90 * 1000) {
+        proactiveTimerRef.current = setTimeout(() => {
+          sendMessage({ proactive: true, proactiveReason: "checkin" }).catch(() => {});
+        }, rand(1000, 4000));
+        return;
+      }
+      // Idle re-engage (>2h)
+      if (idleMs > 2 * 60 * 60 * 1000) {
+        proactiveTimerRef.current = setTimeout(() => {
+          sendMessage({ proactive: true, proactiveReason: "missing" }).catch(() => {});
+        }, rand(5000, 15000));
+        return;
+      }
+      // Otherwise re-check in a minute (covers crossing morning/night thresholds)
+      proactiveTimerRef.current = setTimeout(schedule, 60 * 1000);
+    }
+    schedule();
+    return () => {
+      if (proactiveTimerRef.current) clearTimeout(proactiveTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadedRef.current]);
+  }, [messages, thinking, loadedRef.current]);
 
   // persist
   useEffect(() => {
@@ -167,7 +241,7 @@ function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, thinking, status]);
 
-  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean }) {
+  async function sendMessage(opts?: { kind?: Msg["kind"]; mediaUrl?: string; text?: string; audioDuration?: number; proactive?: boolean; proactiveReason?: string }) {
     const proactive = !!opts?.proactive;
     const kind = opts?.kind ?? "text";
     const text = opts?.text ?? input.trim();
@@ -240,7 +314,7 @@ function ChatPage() {
             : m.text,
       }));
       const userMessage = proactive
-        ? "[PROACTIVE_OPENER]"
+        ? `[PROACTIVE_OPENER:${opts?.proactiveReason || "checkin"}]`
         : kind === "image"
           ? "[I sent you a photo]"
           : kind === "audio"
@@ -253,7 +327,19 @@ function ChatPage() {
       const res = await fetch("/api/public/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history: proactive ? history : history.slice(0, -1), memory, userMessage }),
+        body: JSON.stringify({
+          history: proactive ? history : history.slice(0, -1),
+          memory,
+          userMessage,
+          clientTime: {
+            iso: new Date().toISOString(),
+            hour: new Date().getHours(),
+            minute: new Date().getMinutes(),
+            weekday: new Date().toLocaleDateString(undefined, { weekday: "long" }),
+            tzOffsetMin: new Date().getTimezoneOffset(),
+          },
+          proactiveReason: proactive ? opts?.proactiveReason || "checkin" : null,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
