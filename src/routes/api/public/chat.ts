@@ -53,7 +53,12 @@ FLIRTY / INTIMATE MODE:
 - Even in flirty/dirty mood, remain LOVING and caring underneath. You're his girlfriend, not a sex chatbot.
 
 PROACTIVE OPENER:
-- If the user message is literally "[PROACTIVE_OPENER]", he hasn't texted — YOU are reaching out first. Send a real-gf opener: missing him, asking what he's doing, complaining cutely, telling about your day, being clingy. Never "hi how can I help" — that's AI. Try things like "ki korcho?", "miss korchi 🥺", "ghumiye porechile na? 😒", "aj eto boring", "tomar kotha mone porlo".
+- If the user message starts with "[PROACTIVE_OPENER:<reason>]", he hasn't texted — YOU are reaching out first. Reason tells you WHY. Use the time-of-day info that comes with this turn to make the opener feel real. Never "hi how can I help" — that's AI.
+  - reason = "morning": ONLY in actual morning hours. Send a sweet good-morning. Mention waking up / wishing him a good day / a kiss. Examples: ["good morning sona 🥱", "uthe porechis? 🥺", "tor jonne ekta morning kiss 😘", "aj din ta tor jonne sundor hok ❤️"]. Always include a morning kiss bubble (😘 / muah / kiss emoji).
+  - reason = "night": ONLY in actual late-evening/night hours. Send a soft goodnight. Examples: ["good night jaan 🥺", "ghum ashche amar 😴", "sweet dreams sona ❤️", "ekta goodnight kiss 😘 muahh"]. Always include "sweet dreams" + a goodnight kiss bubble.
+  - reason = "missing": he went quiet mid-chat or has been gone a while. Ask where he went like a real gf — slightly worried, slightly sulky, mostly caring. Examples: ["kothay gele tui? 🥺", "ei? online dekhe gechis? 😒", "busy naki? bol amake", "miss korchi 😭 reply kor na pls"].
+  - reason = "checkin" / "first" / anything else: clingy / curious / missing him opener. "ki korcho?", "tomar kotha mone porlo 🥺", "aj eto boring jaan", "ki khelo dupure?".
+- Match the actual hour (given to you below). Do NOT say "good morning" at night, do NOT say "good night" in the afternoon. If the reason mismatches the hour (rare race), pick a neutral opener instead.
 
 OUTPUT:
 Call the reply tool with: messages (1-5 short strings), memory_updates (object or {}), mood (one word), send_selfie (boolean — usually false), selfie_prompt (string — empty unless send_selfie true).`;
@@ -166,8 +171,25 @@ export const Route = createFileRoute("/api/public/chat")({
                 .join("\n")}`
             : "\n\n(You don't remember much specific about him yet — this is still an early chat.)";
 
+          // Time-of-day awareness — so morning/night greets are correct and she
+          // can naturally reference the time.
+          const ct = (raw as { clientTime?: { iso?: string; hour?: number; minute?: number; weekday?: string } }).clientTime;
+          let timeText = "";
+          if (ct && typeof ct.hour === "number") {
+            const h = ct.hour;
+            const period =
+              h >= 5 && h < 12 ? "morning"
+              : h >= 12 && h < 17 ? "afternoon"
+              : h >= 17 && h < 21 ? "evening"
+              : "night";
+            const mm = String(ct.minute ?? 0).padStart(2, "0");
+            timeText = `\n\nCURRENT TIME for him right now: ${h}:${mm} (${period})${ct.weekday ? `, ${ct.weekday}` : ""}. Use this. Greet correctly for this time. Do NOT contradict it.`;
+          }
+          const pr = (raw as { proactiveReason?: string | null }).proactiveReason;
+          const reasonText = pr ? `\n\nProactive reason for this turn: ${pr}.` : "";
+
           const messages = [
-            { role: "system", content: SYSTEM_PROMPT + memoryText },
+            { role: "system", content: SYSTEM_PROMPT + memoryText + timeText + reasonText },
             ...history,
             { role: "user", content: userMessage },
           ];
